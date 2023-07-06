@@ -44,18 +44,24 @@ def _get_timestamp(date, min_hour, max_hour, greater_than=None):
     if greater_than is None:
         greater_than = datetime.datetime.combine(date, datetime.time.min)
     min_timestamp = datetime.datetime.combine(date, datetime.time(min_hour))
-    max_timestamp = datetime.datetime.combine(date, datetime.time(max_hour))
+    max_timestamp = datetime.datetime.combine(date, datetime.time(max_hour, 59))
     min_timestamp = min_timestamp if min_timestamp > greater_than else greater_than
     interval = (max_timestamp - min_timestamp).total_seconds()
     return min_timestamp + datetime.timedelta(seconds=random.randint(0, interval))
 
 
 def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
-    duration = (end - start).days
+    days = [start + datetime.timedelta(days=day) for day in range((end - start).days + 1)]
+    min_hour = 19
+    max_hour = 23
+    if business_hours:
+        # only weekdays
+        days = [day for day in days if day.weekday() < 5]
+        min_hour = 9
+        max_hour = 17
+    duration = len(days)
     max_commits_per_day = math.ceil(len(commits) / duration)
     last_timestamp = None
-    min_hour = 9 if business_hours else 19
-    max_hour = 17 if business_hours else 23
     for index, commit in enumerate(commits):
         progress = (index + 1) / len(commits)
         # first, choose the date
@@ -66,7 +72,9 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
             if index == len(commits) - 1:
                 date = end
             else:
-                date = start + datetime.timedelta(days=int(duration * progress))
+                # select date by index
+                date_index = math.round(progress * duration)
+                date = days[date_index]
             if date == last_timestamp.date():
                 day_progress += 1
             else:
