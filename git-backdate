@@ -1,0 +1,168 @@
+#!/bin/env python
+""" This script backdates a commit or range of commit to a date or range of dates.
+It can put commit dates to be within of business hours, or outside of business hours."""
+
+import datetime
+import math
+import os
+import random
+import re
+import subprocess
+import sys
+
+import click
+
+
+def get_commits(repo, commitish):
+    """If commitish is a range, return a list of commits in that range."""
+    if ".." in commitish:
+        return subprocess.check_output(["git", "rev-list", commitish]).splitlines()
+    else:
+        return [commitish]
+
+
+def _parse_date(dateish):
+    """Parse a dateish string into a datetime object."""
+    if not re.match(r"\d{4}-\d{2}-\d{2}", dateish):
+        dateish = subprocess.check_output(
+            ["date", "--iso-8601", "--date", dateish]
+        ).strip()
+    return datetime.datetime.strptime(date_string, "%Y-%m-%d").date()
+
+
+def get_dates(dateish):
+    """Dateish can be an iso date, or two separated by .., or a human readable date."""
+    if ".." in dateish:
+        return [_parse_date(d) for d in dateish.split("..")]
+    else:
+        result = _parse_date(dateish)
+        return [result, result]
+
+
+def _get_timestamp(date, min_hour, max_hour, greater_than=None):
+    """Return a random timestamp on the given date, between min_hour and max_hour."""
+    if greater_than is None:
+        greater_than = datetime.datetime.combine(date, datetime.time.min)
+    min_timestamp = datetime.datetime.combine(date, datetime.time(min_hour))
+    max_timestamp = datetime.datetime.combine(date, datetime.time(max_hour))
+    min_timestamp = min_timestamp if min_timestamp > greater_than else greater_than
+    interval = (max_timestamp - min_timestamp).total_seconds()
+    return min_timestamp + datetime.timedelta(seconds=random.randint(0, interval))
+
+
+def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
+    duration = (end - start).days
+    max_commits_per_day = math.ceil(len(commits) / duration)
+    last_timestamp = None
+    min_hour = 9 if business_hours else 19
+    max_hour = 17 if business_hours else 23
+    for index, commit in enumerate(commits):
+        progress = (index + 1) / len(commits)
+        # first, choose the date
+        if index == 0 or duration == 0:
+            date = start
+            day_progress = 0
+        else:
+            if index == len(commits) - 1:
+                date = end
+            else:
+                date = start + datetime.timedelta(days=int(duration * progress))
+            if date == last_timestamp.date():
+                day_progress += 1
+            else:
+                day_progress = 0
+
+        # if we only have one commit per day at most, we can use the whole day.
+        # otherwise, we need to limit the time range further to avoid collisions.
+        if commits_per_day <= 1:
+            _max_hour = max_hour
+        else:
+            _max_hour = min_hour + int(
+                (max_hour - min_hour) * (day_progress / commits_per_day)
+            )
+
+        # then, choose the time
+        timestamp = _get_timestamp(
+            date, min_hour=min_hour, max_hour=_max_hour, greater_than=last_timestamp
+        )
+
+        # finally, set the date
+        if dry_run:
+            print("Would set {} to {}".format(commit, timestamp))
+        else:
+            # Set both the author and committer dates
+            subprocess.check_call(
+                ["git", "commit", "--amend", "--date", timestamp.isoformat(), commit],
+                env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
+            )
+        if is_rebase:
+            subprocess.check_call(["git", "rebase", "--continue"])
+
+
+@click.command()
+@click.option("--repo", default=os.getcwd(), help="Path to the git repository")
+@click.option(
+    "--commit", default="HEAD", help="Commit or range of commits to backdate."
+)
+@click.option(
+    "--date",
+    default="now",
+    help="Date or range of dates to backdate to, can use human readable dates. Separate by ..",
+)
+@click.option("--business-hours", is_flag=True, help="Backdate to business hours")
+@click.option(
+    "--outside-business-hours", is_flag=True, help="Backdate to outside business hours"
+)
+@click.option("--dry-run", is_flag=True, help="Do not actually change the commit dates")
+def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
+    if business_hours and outside_business_hours:
+        print("Cannot use both business hours and outside business hours")
+        sys.exit(1)
+
+    commits = get_commits(repo, commit)
+    start, end = get_dates(date)
+
+    if not commits:
+        print("No commits found")
+        sys.exit(1)
+
+    # We need to rebase if we have more than one commit, or if the one commit is not the current commit
+    if len(commits) > 1:
+        is_rebase = True
+    else:
+        current_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip()
+        # normalize the commit to the full sha
+        if len(commits[0]) < len(current_commit):
+            commits[0] = subprocess.check_output(
+                ["git", "rev-parse", commits[0]]
+            ).strip()
+        is_rebase = commits[0] != current_commit
+
+    # Make sure our current commit sits on top of the commit range with --is-ancestor
+    if is_rebase:
+        for commit in commits:
+            if not subprocess.call(
+                ["git", "merge-base", "--is-ancestor", commit, "HEAD"]
+            ):
+                print("Current commit is not an ancestor of the commit range")
+                sys.exit(1)
+        # Start the rebase
+        subprocess.check_call(
+            ["git", "rebase", "-i", commit + "^"],
+            cwd=repo,
+            env=dict(os.environ, GIT_SEQUENCE_EDITOR="sed -i -re 's/^pick /edit /'"),
+        )
+
+    # Global try/except to make sure we reset the repo if we fail
+    try:
+        rewrite_history(
+            commits,
+            start,
+            end,
+            dry_run=dry_run,
+            business_hours=business_hours,
+            is_rebase=is_rebase,
+        )
+    except Exception:
+        subprocess.check_call(["git", "rebase", "--abort"], cwd=repo)
+        raise
