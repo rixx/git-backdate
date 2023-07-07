@@ -63,6 +63,10 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
     max_commits_per_day = math.ceil(len(commits) / duration)
     last_timestamp = None
     for index, commit in enumerate(commits):
+        # if the commit is not the current commit, we need to continue the rebase
+        if is_rebase and not is_equal(commit, "HEAD"):
+            while not is_equal(commit, "HEAD"):
+                subprocess.check_call(["git", "rebase", "--continue"])
         progress = (index + 1) / len(commits)
         # first, choose the date
         if index == 0 or duration == 0:
@@ -107,6 +111,14 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
             subprocess.check_call(["git", "rebase", "--continue"])
 
 
+def normalize_commit(commit):
+    return subprocess.check_output(["git", "rev-parse", commit]).strip().decode()
+
+
+def is_equal(commit, commitish):
+    return normalize_commit(commit) == normalize_commit(commitish)
+
+
 @click.command()
 @click.option("--repo", default=os.getcwd(), help="Path to the git repository")
 @click.option(
@@ -127,7 +139,8 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
         print("Cannot use both business hours and outside business hours")
         sys.exit(1)
 
-    commits = get_commits(repo, commit)
+    commits = [
+        normalize_commit(c) for c in get_commits(repo, commit)]
     start, end = get_dates(date)
 
     if not commits:
@@ -138,25 +151,20 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
     if len(commits) > 1:
         is_rebase = True
     else:
-        current_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip()
-        # normalize the commit to the full sha
-        if len(commits[0]) < len(current_commit):
-            commits[0] = subprocess.check_output(
-                ["git", "rev-parse", commits[0]]
-            ).strip()
-        is_rebase = commits[0] != current_commit
+        is_rebase = not is_equal(commits[0], "HEAD")
 
     # Make sure our current commit sits on top of the commit range with --is-ancestor
     if is_rebase:
         for commit in commits:
-            if not subprocess.call(
+            is_head = is_equal(commit, "HEAD")
+            if not (is_head or subprocess.call(
                 ["git", "merge-base", "--is-ancestor", commit, "HEAD"]
-            ):
+            )):
                 print("Current commit is not an ancestor of the commit range")
                 sys.exit(1)
         # Start the rebase
         subprocess.check_call(
-            ["git", "rebase", "-i", commit + "^"],
+            ["git", "rebase", "-i", commits[0] + "^"],
             cwd=repo,
             env=dict(os.environ, GIT_SEQUENCE_EDITOR="sed -i -re 's/^pick /edit /'"),
         )
