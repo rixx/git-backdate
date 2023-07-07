@@ -26,8 +26,8 @@ def _parse_date(dateish):
     if not re.match(r"\d{4}-\d{2}-\d{2}", dateish):
         dateish = subprocess.check_output(
             ["date", "--iso-8601", "--date", dateish]
-        ).strip()
-    return datetime.datetime.strptime(date_string, "%Y-%m-%d").date()
+        ).strip().decode()
+    return datetime.datetime.strptime(dateish, "%Y-%m-%d").date()
 
 
 def get_dates(dateish):
@@ -174,3 +174,6 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
     except Exception:
         subprocess.check_call(["git", "rebase", "--abort"], cwd=repo)
         raise
+
+if __name__ == "__main__":
+    main()
