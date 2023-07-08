@@ -171,10 +171,13 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
                 print("Current commit is not an ancestor of the commit range")
                 sys.exit(1)
         # Start the rebase
+        # We construct a sed command to change only our commits to edit
+        short_commits = [c[:7] for c in commits]
+        sed_command = r"sed -i -re 's/^pick ({'|'.join(short_commits)})/edit \1/'"
         subprocess.check_call(
             ["git", "rebase", "-i", commits[0] + "^"],
             cwd=repo,
-            env=dict(os.environ, GIT_SEQUENCE_EDITOR="sed -i -re 's/^pick /edit /'"),
+            env=dict(os.environ, GIT_SEQUENCE_EDITOR=sed_command),
         )
 
     # Global try/except to make sure we reset the repo if we fail
