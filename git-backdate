@@ -13,7 +13,7 @@ import sys
 import click
 
 
-def get_commits(repo, commitish):
+def get_commits(commitish):
     """If commitish is a range, return a list of commits in that range."""
     if ".." in commitish:
         result = subprocess.check_output(["git", "rev-list", commitish]).splitlines()
@@ -138,7 +138,6 @@ def is_equal(commit, commitish):
 
 
 @click.command()
-@click.option("--repo", default=os.getcwd(), help="Path to the git repository")
 @click.option(
     "--commit", default="HEAD", help="Commit or range of commits to backdate."
 )
@@ -152,12 +151,12 @@ def is_equal(commit, commitish):
     "--outside-business-hours", is_flag=True, help="Backdate to outside business hours"
 )
 @click.option("--dry-run", is_flag=True, help="Do not actually change the commit dates")
-def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
+def main(commit, date, business_hours, outside_business_hours, dry_run):
     if business_hours and outside_business_hours:
         print("Cannot use both business hours and outside business hours")
         sys.exit(1)
 
-    commits = [normalize_commit(c) for c in get_commits(repo, commit)]
+    commits = [normalize_commit(c) for c in get_commits(commit)]
     start, end = get_dates(date)
 
     if not commits:
@@ -186,7 +185,6 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
         sed_command = rf"sed -i -re 's/^pick ({'|'.join(short_commits)})/edit \1/'"
         subprocess.check_call(
             ["git", "rebase", "-i", commits[0] + "^"],
-            cwd=repo,
             env=dict(os.environ, GIT_SEQUENCE_EDITOR=sed_command),
         )
 
@@ -201,7 +199,7 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
             is_rebase=is_rebase,
         )
     except Exception:
-        subprocess.check_call(["git", "rebase", "--abort"], cwd=repo)
+        subprocess.check_call(["git", "rebase", "--abort"])
         raise
 
 
