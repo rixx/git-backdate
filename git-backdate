@@ -16,7 +16,9 @@ import click
 def get_commits(repo, commitish):
     """If commitish is a range, return a list of commits in that range."""
     if ".." in commitish:
-        return subprocess.check_output(["git", "rev-list", commitish]).splitlines()
+        result = subprocess.check_output(["git", "rev-list", commitish]).splitlines()
+        # git rev-list returns commits in reverse chronological order
+        return result[::-1]
     else:
         return [commitish]
 
@@ -64,17 +66,19 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
         min_hour = 9
         max_hour = 17
     duration = len(days)
-    max_commits_per_day = math.ceil(len(commits) / duration)
+    commits_per_day = math.ceil(len(commits) / duration)
     last_timestamp = None
     commit_count = len(commits)
     while commits:
         # if the commit is part of our commits of interest, we need to continue the rebase
-        if is_rebase and not is_equal(commit, "HEAD"):
-            while not is_equal(commit, "HEAD"):
+        commit = normalize_commit("HEAD")
+        if commit not in commits:
+            if is_rebase:
                 subprocess.check_call(["git", "rebase", "--continue"])
+            return
         progress = len(commits) / commit_count
         # first, choose the date
-        if len(commits) == commit_count or duration == 0:
+        if len(commits) == commit_count or duration == 1:
             date = start
             day_progress = 0
         else:
@@ -82,7 +86,7 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
                 date = end
             else:
                 # select date by index
-                date_index = math.round(progress * duration)
+                date_index = round(progress * (duration - 1))
                 date = days[date_index]
             if date == last_timestamp.date():
                 day_progress += 1
@@ -109,9 +113,17 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
         else:
             # Set both the author and committer dates
             subprocess.check_call(
-                ["git", "commit", "--amend", "--date", timestamp.isoformat(), commit],
+                [
+                    "git",
+                    "commit",
+                    "--amend",
+                    "--date",
+                    timestamp.isoformat(),
+                    "--no-edit",
+                ],
                 env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
             )
+        last_timestamp = timestamp
         commits.remove(commit)
         if is_rebase:
             subprocess.check_call(["git", "rebase", "--continue"])
@@ -162,18 +174,16 @@ def main(repo, commit, date, business_hours, outside_business_hours, dry_run):
     if is_rebase:
         for commit in commits:
             is_head = is_equal(commit, "HEAD")
-            if not (
-                is_head
-                or subprocess.call(
-                    ["git", "merge-base", "--is-ancestor", commit, "HEAD"]
-                )
-            ):
-                print("Current commit is not an ancestor of the commit range")
+            is_ancestor = subprocess.call(
+                ["git", "merge-base", "--is-ancestor", "HEAD", commit]
+            )
+            if not is_head and not is_ancestor:
+                print(f"Current commit is not an ancestor of the commit range {commit}")
                 sys.exit(1)
         # Start the rebase
         # We construct a sed command to change only our commits to edit
         short_commits = [c[:7] for c in commits]
-        sed_command = r"sed -i -re 's/^pick ({'|'.join(short_commits)})/edit \1/'"
+        sed_command = rf"sed -i -re 's/^pick ({'|'.join(short_commits)})/edit \1/'"
         subprocess.check_call(
             ["git", "rebase", "-i", commits[0] + "^"],
             cwd=repo,
