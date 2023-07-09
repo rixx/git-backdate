@@ -75,20 +75,14 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
     commits_per_day = math.ceil(len(commits) / duration)
     last_timestamp = None
     commit_count = len(commits)
-    while commits:
-        # if the commit is part of our commits of interest, we need to continue the rebase
-        commit = normalize_commit("HEAD")
-        if commit not in commits:
-            if is_rebase:
-                check_call(["git", "rebase", "--continue"])
-            return
-        progress = len(commits) / commit_count
+    for commit_index in range(commit_count):
+        progress = (commit_index + 1) / commit_count
         # first, choose the date
-        if len(commits) == commit_count or duration == 1:
+        if commit_index == 0 or duration == 1:
             date = start
             day_progress = 0
         else:
-            if len(commits) == 1:
+            if commit_index == commit_count - 1:
                 date = end
             else:
                 # select date by index
@@ -130,7 +124,6 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
                 env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
             )
         last_timestamp = timestamp
-        commits.remove(commit)
         if is_rebase:
             check_call(["git", "rebase", "--continue"])
 
