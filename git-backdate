@@ -7,8 +7,8 @@ import math
 import os
 import random
 import re
-import subprocess
 import sys
+from subprocess import call, check_call, check_output
 
 import click
 
@@ -16,7 +16,7 @@ import click
 def get_commits(commitish):
     """If commitish is a range, return a list of commits in that range."""
     if ".." in commitish:
-        result = subprocess.check_output(["git", "rev-list", commitish]).splitlines()
+        result = check_output(["git", "rev-list", commitish]).splitlines()
         # git rev-list returns commits in reverse chronological order
         return result[::-1]
     else:
@@ -27,9 +27,7 @@ def _parse_date(dateish):
     """Parse a dateish string into a datetime object."""
     if not re.match(r"\d{4}-\d{2}-\d{2}", dateish):
         dateish = (
-            subprocess.check_output(["date", "--iso-8601", "--date", dateish])
-            .strip()
-            .decode()
+            check_output(["date", "--iso-8601", "--date", dateish]).strip().decode()
         )
     return datetime.datetime.strptime(dateish, "%Y-%m-%d").date()
 
@@ -54,6 +52,14 @@ def _get_timestamp(date, min_hour, max_hour, greater_than=None):
     return min_timestamp + datetime.timedelta(seconds=random.randint(0, interval))
 
 
+def rebase_in_progress():
+    """Return True if a rebase is in progress."""
+    git_root = check_output(["git", "rev-parse", "--show-toplevel"]).strip().decode()
+    return os.path.exists(
+        os.path.join(git_root, ".git", "rebase-merge")
+    ) or os.path.exists(os.path.join(git_root, ".git", "rebase-apply"))
+
+
 def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
     days = [
         start + datetime.timedelta(days=day) for day in range((end - start).days + 1)
@@ -74,7 +80,7 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
         commit = normalize_commit("HEAD")
         if commit not in commits:
             if is_rebase:
-                subprocess.check_call(["git", "rebase", "--continue"])
+                check_call(["git", "rebase", "--continue"])
             return
         progress = len(commits) / commit_count
         # first, choose the date
@@ -112,7 +118,7 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
             print("Would set {} to {}".format(commit, timestamp))
         else:
             # Set both the author and committer dates
-            subprocess.check_call(
+            check_call(
                 [
                     "git",
                     "commit",
@@ -126,11 +132,11 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
         last_timestamp = timestamp
         commits.remove(commit)
         if is_rebase:
-            subprocess.check_call(["git", "rebase", "--continue"])
+            check_call(["git", "rebase", "--continue"])
 
 
 def normalize_commit(commit):
-    return subprocess.check_output(["git", "rev-parse", commit]).strip().decode()
+    return check_output(["git", "rev-parse", commit]).strip().decode()
 
 
 def is_equal(commit, commitish):
@@ -173,7 +179,7 @@ def main(commit, date, business_hours, outside_business_hours, dry_run):
     if is_rebase:
         for commit in commits:
             is_head = is_equal(commit, "HEAD")
-            is_ancestor = subprocess.call(
+            is_ancestor = call(
                 ["git", "merge-base", "--is-ancestor", "HEAD", commit]
             )
             if not is_head and not is_ancestor:
@@ -183,7 +189,7 @@ def main(commit, date, business_hours, outside_business_hours, dry_run):
         # We construct a sed command to change only our commits to edit
         short_commits = [c[:7] for c in commits]
         sed_command = rf"sed -i -re 's/^pick ({'|'.join(short_commits)})/edit \1/'"
-        subprocess.check_call(
+        check_call(
             ["git", "rebase", "-i", commits[0] + "^"],
             env=dict(os.environ, GIT_SEQUENCE_EDITOR=sed_command),
         )
@@ -199,7 +205,7 @@ def main(commit, date, business_hours, outside_business_hours, dry_run):
             is_rebase=is_rebase,
         )
     except Exception:
-        subprocess.check_call(["git", "rebase", "--abort"])
+        check_call(["git", "rebase", "--abort"])
         raise
 
 
