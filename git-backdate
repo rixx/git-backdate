@@ -1,14 +1,14 @@
 #!/bin/env python
-
-import datetime
+"""Backdate a commit or range of commit to a date or range of dates.
+"""
+import argparse
+import datetime as dt
 import math
 import os
 import random
 import re
 import sys
 from subprocess import call, check_call, check_output
-
-import click
 
 
 def get_commits(commitish):
@@ -126,46 +126,44 @@ def normalize_commit(commit):
     return check_output(["git", "rev-parse", commit]).strip().decode()
 
 
-def is_equal(commit, commitish):
-    return normalize_commit(commit) == normalize_commit(commitish)
+def is_equal(commitish_a: str, commitish_b: str) -> bool:
+    return normalize_commit(commitish_a) == normalize_commit(commitish_b)
 
 
-@click.command()
-@click.argument(
-    "commits",
-    default="HEAD",
-)
-@click.argument(
-    "dates",
-    default="now",
-)
-@click.option(
-    "--business-hours",
-    is_flag=True,
-    help="Backdate to business hours: Mon–Fri, 9–17",
-    default=True,
-)
-@click.option(
-    "--outside-business-hours",
-    is_flag=True,
-    help="Backdate to outside business hours: 19–23, every day of the week",
-    default=False,
-)
-def main(commits, dates, business_hours, outside_business_hours):
-    """Backdate a commit or range of commit to a date or range of dates.
-    Put commit dates to be within of business hours (including skipping weekends), or outside of business hours.
+def main() -> None:
+    parser = argparse.ArgumentParser(description=sys.modules[__name__].__doc__)
+    parser.add_argument(
+        "commits",
+        nargs=1,
+        default="HEAD",
+        help="COMMITS is a commit or range of commits to backdate. If only one commit is given, it will be used as the end of the range.",
+    )
+    parser.add_argument(
+        "dates",
+        nargs=1,
+        default="now",
+        help='DATES is a date or range of dates to backdate to, can use human readable dates. Separate by .., eg "1 week ago..yesterday"',
+    )
+    parser.add_argument(
+        "--business-hours",
+        action="store_true",
+        help="Backdate to business hours: Mon–Fri, 9–17",
+        default=True,
+    )
+    parser.add_argument(
+        "--no-business-hours",
+        action="store_true",
+        help="Backdate to outside business hours: 19–23, every day of the week",
+        default=False,
+    )
+    args = parser.parse_args()
 
-    COMMITS is a commit or range of commits to backdate. If only one commit is given, it will be used as the end of the range.
-
-    DATES is a date or range of dates to backdate to, can use human readable dates. Separate by .., eg "1 week ago..yesterday"
-    """
-
-    if business_hours and outside_business_hours:
+    if args.business_hours and args.no_business_hours:
         print("Cannot use both business hours and outside business hours")
         sys.exit(1)
 
-    commits = [normalize_commit(c) for c in get_commits(commits)]
-    start, end = get_dates(dates)
+    commits = [normalize_commit(c) for c in get_commits(args.commits)]
+    start, end = get_dates(args.dates)
 
     if not commits:
         print("No commits found")
