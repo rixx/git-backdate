@@ -198,8 +198,13 @@ def main() -> None:
             no_business_hours=no_business_hours,
         )
     except Exception:
-        check_call(["git", "rebase", "--abort"])
+        if rebase_in_progress():
+            check_call(["git", "rebase", "--abort"])
         raise
+    finally:
+        # Shouldn't happen, but let's make sure we end on a clean repo
+        if rebase_in_progress():
+            check_call(["git", "rebase", "--continue"])
 
 
 if __name__ == "__main__":
