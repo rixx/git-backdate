@@ -14,13 +14,12 @@ from subprocess import call, check_call, check_output
 
 def get_commits(commitish: str) -> list[str]:
     """If commitish is a range, return a list of commits in that range."""
-    if ".." in commitish:
-        result = check_output(["git", "rev-list", commitish]).splitlines()
-        # git rev-list returns commits in reverse chronological order
-        # we don't really care atm, but it does make debugging awkward.
-        return result[::-1]
-    else:
-        return [commitish]
+    if ".." not in commitish:
+        commitish = f"{commitish}..HEAD"
+    result = check_output(["git", "rev-list", commitish]).splitlines()
+    # git rev-list returns commits in reverse chronological order
+    # we don't really care atm, but it does make debugging awkward.
+    return result[::-1]
 
 
 def _parse_date(dateish: str) -> dt.date:
@@ -91,7 +90,7 @@ def rewrite_history(
         # first, choose the date
         date_index = round(progress * (duration - 1))
         date = days[date_index]
-        if date == last_timestamp.date():
+        if not last_timestamp or date == last_timestamp.date():
             day_progress += 1
         else:
             day_progress = 0
@@ -137,13 +136,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=sys.modules[__name__].__doc__)
     parser.add_argument(
         "commits",
-        nargs=1,
+        metavar="COMMITS",
         default="HEAD",
         help="COMMITS is a commit or range of commits to backdate. If only one commit is given, it will be used as the end of the range.",
     )
     parser.add_argument(
         "dates",
-        nargs=1,
+        metavar="DATES",
         default="now",
         help='DATES is a date or range of dates to backdate to, can use human readable dates. Separate by .., eg "1 week ago..yesterday"',
     )
@@ -151,7 +150,7 @@ def main() -> None:
         "--business-hours",
         action="store_true",
         help="Backdate to business hours: Mon–Fri, 9–17",
-        default=True,
+        default=False,
     )
     parser.add_argument(
         "--no-business-hours",
@@ -194,8 +193,8 @@ def main() -> None:
             commits,
             start,
             end,
-            business_hours=business_hours,
-            no_business_hours=no_business_hours,
+            business_hours=args.business_hours,
+            no_business_hours=args.no_business_hours,
         )
     except Exception:
         if rebase_in_progress():
