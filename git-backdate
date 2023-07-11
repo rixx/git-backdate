@@ -192,7 +192,7 @@ def main() -> None:
         rewrite_history(
             commits,
             start,
-            end,
+            end + dt.timedelta(days=1),  # we want to include the end date
             business_hours=args.business_hours,
             no_business_hours=args.no_business_hours,
         )
