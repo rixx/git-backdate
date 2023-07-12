@@ -80,7 +80,7 @@ def rewrite_history(
         min_hour = 9
         max_hour = 17
     elif no_business_hours:
-        min_hour = 0
+        min_hour = 18
         max_hour = 23
     duration = len(days)
     commits_per_day = math.ceil(len(commits) / duration)
