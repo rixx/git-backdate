@@ -19,7 +19,7 @@ def get_commits(commitish: str) -> list[str]:
     result = check_output(["git", "rev-list", commitish]).splitlines()
     # git rev-list returns commits in reverse chronological order
     # we don't really care atm, but it does make debugging awkward.
-    return result[::-1]
+    return [c.decode() for c in result[::-1]]
 
 
 def _parse_date(dateish: str) -> dt.date:
@@ -42,7 +42,7 @@ def get_dates(dateish: str) -> list[dt.date]:
 
 
 def _get_timestamp(
-    date: dt.date, min_hour: int, max_hour: int, greater_than: dt.date | None = None
+    date: dt.date, min_hour: int, max_hour: int, greater_than: dt.datetime | None = None
 ) -> dt.datetime:
     """Return a random timestamp on the given date, between min_hour and max_hour."""
     greater_than = greater_than or dt.datetime.combine(date, dt.time.min)
