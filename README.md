@@ -5,11 +5,13 @@ a range of dates.
 
 ## Features
 
-- git-backdate understands business hours, and that you might want to have your commits placed inside or outside of them.
+- Understands business hours, and that you might want to have your commits placed inside or outside of them.
 - Commits are randomly distributed within the given time window, while retaining their order. No 12:34:56 for you
   anymore!
 - Given a single commit, git-backdate will automatically assume that you want to rebase the entire range from there to
   your current `HEAD`.
+- Sets author date and committer date so you don't have to look up how to set both of them every time you fudge a commit
+  timestamp.
 - Python, but with near-zero dependencies (see below; only `sed` and `date`), so you can just download and run it
   without Python package management making you sad.
 
