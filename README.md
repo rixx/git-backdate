@@ -65,6 +65,7 @@ they represent legal or career advice:
 - Did work things outside work hours, but don't want to nudge your workplace culture into everybody working at all times.
 - Worked an entire weekend for a client, but don't want them to get used to it and start calling you on every weekend.
 - Made some fixes during a boring meeting, but pretended to pay attention throughout.
+- Want to confuse your coworkers by making it look like you were committing code while doing a company-wide presentation.
 - <your reason here, please share with the class>
 
 ## Caveats
