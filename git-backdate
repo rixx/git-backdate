@@ -1,6 +1,4 @@
 #!/bin/env python
-""" This script backdates a commit or range of commit to a date or range of dates.
-It can put commit dates to be within of business hours, or outside of business hours."""
 
 import datetime
 import math
@@ -60,7 +58,7 @@ def rebase_in_progress():
     ) or os.path.exists(os.path.join(git_root, ".git", "rebase-apply"))
 
 
-def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
+def rewrite_history(commits, start, end, business_hours, is_rebase):
     days = [
         start + datetime.timedelta(days=day) for day in range((end - start).days + 1)
     ]
@@ -107,22 +105,18 @@ def rewrite_history(commits, start, end, dry_run, business_hours, is_rebase):
             date, min_hour=min_hour, max_hour=_max_hour, greater_than=last_timestamp
         )
 
-        # finally, set the date
-        if dry_run:
-            print("Would set {} to {}".format(commit, timestamp))
-        else:
-            # Set both the author and committer dates
-            check_call(
-                [
-                    "git",
-                    "commit",
-                    "--amend",
-                    "--date",
-                    timestamp.isoformat(),
-                    "--no-edit",
-                ],
-                env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
-            )
+        # Set both the author and committer dates
+        check_call(
+            [
+                "git",
+                "commit",
+                "--amend",
+                "--date",
+                timestamp.isoformat(),
+                "--no-edit",
+            ],
+            env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
+        )
         last_timestamp = timestamp
         if is_rebase:
             check_call(["git", "rebase", "--continue"])
@@ -137,26 +131,41 @@ def is_equal(commit, commitish):
 
 
 @click.command()
-@click.option(
-    "--commit", default="HEAD", help="Commit or range of commits to backdate."
+@click.argument(
+    "commits",
+    default="HEAD",
 )
-@click.option(
-    "--date",
+@click.argument(
+    "dates",
     default="now",
-    help="Date or range of dates to backdate to, can use human readable dates. Separate by ..",
 )
-@click.option("--business-hours", is_flag=True, help="Backdate to business hours")
 @click.option(
-    "--outside-business-hours", is_flag=True, help="Backdate to outside business hours"
+    "--business-hours",
+    is_flag=True,
+    help="Backdate to business hours: Mon–Fri, 9–17",
+    default=True,
 )
-@click.option("--dry-run", is_flag=True, help="Do not actually change the commit dates")
-def main(commit, date, business_hours, outside_business_hours, dry_run):
+@click.option(
+    "--outside-business-hours",
+    is_flag=True,
+    help="Backdate to outside business hours: 19–23, every day of the week",
+    default=False,
+)
+def main(commits, dates, business_hours, outside_business_hours):
+    """Backdate a commit or range of commit to a date or range of dates.
+    Put commit dates to be within of business hours (including skipping weekends), or outside of business hours.
+
+    COMMITS is a commit or range of commits to backdate. If only one commit is given, it will be used as the end of the range.
+
+    DATES is a date or range of dates to backdate to, can use human readable dates. Separate by .., eg "1 week ago..yesterday"
+    """
+
     if business_hours and outside_business_hours:
         print("Cannot use both business hours and outside business hours")
         sys.exit(1)
 
-    commits = [normalize_commit(c) for c in get_commits(commit)]
-    start, end = get_dates(date)
+    commits = [normalize_commit(c) for c in get_commits(commits)]
+    start, end = get_dates(dates)
 
     if not commits:
         print("No commits found")
@@ -172,9 +181,7 @@ def main(commit, date, business_hours, outside_business_hours, dry_run):
     if is_rebase:
         for commit in commits:
             is_head = is_equal(commit, "HEAD")
-            is_ancestor = call(
-                ["git", "merge-base", "--is-ancestor", "HEAD", commit]
-            )
+            is_ancestor = call(["git", "merge-base", "--is-ancestor", "HEAD", commit])
             if not is_head and not is_ancestor:
                 print(f"Current commit is not an ancestor of the commit range {commit}")
                 sys.exit(1)
@@ -193,7 +200,6 @@ def main(commit, date, business_hours, outside_business_hours, dry_run):
             commits,
             start,
             end,
-            dry_run=dry_run,
             business_hours=business_hours,
             is_rebase=is_rebase,
         )
