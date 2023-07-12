@@ -48,8 +48,10 @@ def _get_timestamp(
     greater_than = greater_than or dt.datetime.combine(date, dt.time.min)
     min_timestamp = dt.datetime.combine(date, dt.time(min_hour))
     max_timestamp = dt.datetime.combine(date, dt.time(max_hour, 59))
+    now_timestamp = dt.datetime.now()
     min_timestamp = min_timestamp if min_timestamp > greater_than else greater_than
-    interval = (max_timestamp - min_timestamp).total_seconds()
+    max_timestamp = max_timestamp if max_timestamp < now_timestamp else now_timestamp
+    interval = int((max_timestamp - min_timestamp).total_seconds())
     return min_timestamp + dt.timedelta(seconds=random.randint(0, interval))
 
 
@@ -192,7 +194,7 @@ def main() -> None:
         rewrite_history(
             commits,
             start,
-            end + dt.timedelta(days=1),  # we want to include the end date
+            end,  # we want to include the end date
             business_hours=args.business_hours,
             no_business_hours=args.no_business_hours,
         )
