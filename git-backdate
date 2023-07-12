@@ -10,9 +10,10 @@ import re
 import sys
 from pathlib import Path
 from subprocess import call, check_call, check_output
+from typing import Union
 
 
-def get_commits(commitish: str) -> list[str]:
+def get_commits(commitish: str) -> list[bytes]:
     """If commitish is a range, return a list of commits in that range."""
     if ".." not in commitish:
         commitish = f"{commitish}..HEAD"
@@ -42,7 +43,7 @@ def get_dates(dateish: str) -> list[dt.date]:
 
 
 def _get_timestamp(
-    date: dt.date, min_hour: int, max_hour: int, greater_than: dt.date | None = None
+    date: dt.date, min_hour: int, max_hour: int, greater_than: dt.datetime | None = None
 ) -> dt.datetime:
     """Return a random timestamp on the given date, between min_hour and max_hour."""
     greater_than = greater_than or dt.datetime.combine(date, dt.time.min)
@@ -126,11 +127,11 @@ def rewrite_history(
         check_call(["git", "rebase", "--continue"])
 
 
-def normalize_commit(commit: str) -> str:
+def normalize_commit(commit: Union[str, bytes]) -> str:
     return check_output(["git", "rev-parse", commit]).strip().decode()
 
 
-def is_equal(commitish_a: str, commitish_b: str) -> bool:
+def is_equal(commitish_a: Union[str, bytes], commitish_b: Union[str, bytes]) -> bool:
     return normalize_commit(commitish_a) == normalize_commit(commitish_b)
 
 
