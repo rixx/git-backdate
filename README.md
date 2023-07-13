@@ -1,3 +1,11 @@
+> Who controls the past, controls the future: who controls the present, controls the past.the mutability of the past is
+> the central tenet of Ingsoc. Past events, it is argued, have no existence, but survive only in written records and in
+> human memories. The past is whatever the records and the memories agree upon. And since ~~the Party~~ git is in full
+> control of all records, and in equally full control of the minds of its members, it follows that the past is whatever
+> ~~the Party~~ git chooses to make it.
+
+*– Linus Torvalds, probably*
+
 # git-backdate
 
 git-backdate helps you to change the date of one or multiple commits to a new date or
