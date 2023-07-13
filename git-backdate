@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 """Backdate a commit or range of commit to a date or range of dates.
 """
 import argparse
