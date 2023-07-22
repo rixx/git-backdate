@@ -46,7 +46,7 @@ git backdate HEAD "5 hours ago"
 
 ## Installation
 
-Drop the `git-backdate` file somewhere in your `PATH` or whereever you like:
+Drop the `git-backdate` file somewhere in your `PATH` or wherever you like:
 
 ```shell
 curl https://raw.githubusercontent.com/rixx/git-backdate/main/git-backdate > git-backdate
