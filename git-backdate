@@ -149,13 +149,13 @@ def main() -> None:
         help='DATES is a date or range of dates to backdate to, can use human readable dates. Separate by .., eg "1 week ago..yesterday"',
     )
     parser.add_argument(
-        "--business-hours",
+        "--business-hours", "--office-hours",
         action="store_true",
         help="Backdate to business hours: Mon–Fri, 9–17",
         default=False,
     )
     parser.add_argument(
-        "--no-business-hours",
+        "--no-business-hours", "--no-office-hours",
         action="store_true",
         help="Backdate to outside business hours: 19–23, every day of the week",
         default=False,
