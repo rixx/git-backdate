@@ -64,6 +64,15 @@ def rebase_in_progress() -> bool:
         (git_root / ".git" / f).exists() for f in ("rebase-merge", "rebase-apply")
     )
 
+def prev_commit_timestamp(commits) -> dt.datetime | None:
+    """Returns the timestamp of the commit before the range of to be backdated commits."""
+    pre_commit = f"{commits[0]}~1"
+    try:
+        pre_raw_timestamp = check_output(["git", "show", "-s" ,"--format=%cI", pre_commit]).strip().decode()
+        pre_timestamp = dt.datetime.fromisoformat(str(pre_raw_timestamp)).replace(tzinfo=None)
+    except:
+        pre_timestamp = None
+    return pre_timestamp
 
 def rewrite_history(
     commits: list[str],
@@ -82,32 +91,34 @@ def rewrite_history(
     elif no_business_hours:
         min_hour = 18
         max_hour = 23
-    duration = len(days)
-    commits_per_day = math.ceil(len(commits) / duration)
-    last_timestamp = None
-    commit_count = len(commits)
-    day_progress = 0
-    for commit_index in range(commit_count):
-        progress = (commit_index + 1) / commit_count
+    prev_timestamp = prev_commit_timestamp(commits)
+    commit_total_count = len(commits)
+    daily_commit_limit = math.ceil(commit_total_count / len(days))
+    daily_commit_count = 0
+    for commit_index in range(commit_total_count):
+        commit_progress = (commit_index + 1) / commit_total_count
         # first, choose the date
-        date_index = round(progress * (duration - 1))
-        date = days[date_index]
-        if not last_timestamp or date == last_timestamp.date():
-            day_progress += 1
+        day_index = round(commit_progress * (len(days) - 1))
+        date = days[day_index]
+
+        if not prev_timestamp or date == prev_timestamp.date():
+            daily_commit_count += 1
+            _min_hour = min_hour if min_hour > prev_timestamp.hour else prev_timestamp.hour
         else:
-            day_progress = 0
+            daily_commit_count = 0
+            _min_hour = min_hour
 
         # if we only have one commit per day at most, we can use the whole day.
         # otherwise, we need to limit the time range further to avoid collisions.
-        if commits_per_day <= 1:
+        if daily_commit_limit <= 1:
             _max_hour = max_hour
         else:
-            _max_hour = min_hour + int(
-                (max_hour - min_hour) * (day_progress / commits_per_day)
+            _max_hour = _min_hour + int(
+                (max_hour - _min_hour) / (1 + daily_commit_limit - daily_commit_count)
             )
 
         timestamp = _get_timestamp(
-            date, min_hour=min_hour, max_hour=_max_hour, greater_than=last_timestamp
+            date, min_hour=_min_hour, max_hour=_max_hour, greater_than=prev_timestamp
         )
 
         # Set both the author and committer dates
@@ -122,7 +133,7 @@ def rewrite_history(
             ],
             env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
         )
-        last_timestamp = timestamp
+        prev_timestamp = timestamp
         check_call(["git", "rebase", "--continue"])
 
 
