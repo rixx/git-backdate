@@ -42,6 +42,15 @@ def get_dates(dateish: str) -> list[dt.date]:
     return [result, result]
 
 
+def get_commit_timestamp(commit: str) -> dt.datetime | None:
+    """Return the timestamp of the given commit."""
+    try:
+        timestamp = check_output(["git", "show", "-s", "--format=%ct", commit]).strip().decode()
+        return dt.datetime.fromtimestamp(int(timestamp))
+    except CalledProcessError:
+        return None
+
+
 def _get_timestamp(
     date: dt.date, min_hour: int, max_hour: int, greater_than: dt.datetime | None = None
 ) -> dt.datetime:
@@ -73,6 +82,9 @@ def rewrite_history(
     business_hours: bool,
     no_business_hours: bool,
 ) -> None:
+    last_timestamp = get_commit_timestamp(f"{commits[0]}~1")
+    if last_timestamp and last_timestamp.date() > start:
+        start = last_timestamp.date()
     days = [start + dt.timedelta(days=day) for day in range((end - start).days + 1)]
     min_hour = 0
     max_hour = 23
@@ -84,10 +96,8 @@ def rewrite_history(
         min_hour = 18
         max_hour = 23
     duration = len(days)
-    commits_per_day = math.ceil(len(commits) / duration)
-    last_timestamp = None
     commit_count = len(commits)
-    day_progress = 0
+    commits_per_day = math.ceil(commit_count / duration)
     for commit_index in range(commit_count):
         progress = (commit_index + 1) / commit_count
         # first, choose the date
