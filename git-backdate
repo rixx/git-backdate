@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Backdate a commit or range of commit to a date or range of dates.
 """
+from __future__ import annotations
 import argparse
 import datetime as dt
 import math
@@ -140,12 +141,14 @@ def main() -> None:
         "commits",
         metavar="COMMITS",
         default="HEAD",
+        type=str,
         help="COMMITS is a commit or range of commits to backdate. If only one commit is given, it will be used as the end of the range.",
     )
     parser.add_argument(
         "dates",
         metavar="DATES",
         default="now",
+        type=str,
         help='DATES is a date or range of dates to backdate to, can use human readable dates. Separate by .., eg "1 week ago..yesterday"',
     )
     parser.add_argument(
