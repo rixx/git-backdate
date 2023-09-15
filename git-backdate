@@ -45,7 +45,9 @@ def get_dates(dateish: str) -> list[dt.date]:
 def get_commit_timestamp(commit: str) -> dt.datetime | None:
     """Return the timestamp of the given commit."""
     try:
-        timestamp = check_output(["git", "show", "-s", "--format=%ct", commit]).strip().decode()
+        timestamp = (
+            check_output(["git", "show", "-s", "--format=%ct", commit]).strip().decode()
+        )
         return dt.datetime.fromtimestamp(int(timestamp))
     except CalledProcessError:
         return None
@@ -81,11 +83,17 @@ def rewrite_history(
     end: dt.date,
     business_hours: bool,
     no_business_hours: bool,
+    except_days: list[dt.date] | None = None,
 ) -> None:
     last_timestamp = get_commit_timestamp(f"{commits[0]}~1")
     if last_timestamp and last_timestamp.date() > start:
         start = last_timestamp.date()
-    days = [start + dt.timedelta(days=day) for day in range((end - start).days + 1)]
+    except_days = except_days or []
+    days = [
+        start + dt.timedelta(days=day)
+        for day in range((end - start).days + 1)
+        if start + dt.timedelta(days=day) not in except_days
+    ]
     min_hour = 0
     max_hour = 23
     if business_hours:
@@ -172,6 +180,11 @@ def main() -> None:
         help="Backdate to outside business hours: 19–23, every day of the week",
         default=False,
     )
+    parser.add_argument(
+        "--except-days",
+        type=str,
+        help="A comma-separated list of dates or date ranges to exclude from backdating (eg. 2021-01-01,2021-01-02..2021-01-04)",
+    )
     args = parser.parse_args()
 
     if args.business_hours and args.no_business_hours:
@@ -180,6 +193,12 @@ def main() -> None:
 
     commits = [normalize_commit(c) for c in get_commits(args.commits)]
     start, end = get_dates(args.dates)
+
+    except_days = args.except_days
+    if except_days:
+        except_days = [get_dates(d) for d in except_days.split(",")]
+        # Flatten the list
+        except_days = [d for dates in except_days for d in dates]
 
     if not commits:
         print("No commits found")
@@ -209,6 +228,7 @@ def main() -> None:
             end,  # we want to include the end date
             business_hours=args.business_hours,
             no_business_hours=args.no_business_hours,
+            except_days=except_days,
         )
     except Exception:
         if rebase_in_progress():

@@ -14,6 +14,7 @@ a range of dates.
 ## Features
 
 - Understands business hours, and that you might want to have your commits placed inside or outside of them.
+- You can also except specific days or date ranges (e.g. vacation, illness …)
 - Commits are randomly distributed within the given time window, while retaining their order. No 12:34:56 for you
   anymore!
 - Given a single commit, git-backdate will automatically assume that you want to rebase the entire range from there to
@@ -42,6 +43,12 @@ Backdate only the current commit to a human readable time:
 
 ```shell
 git backdate HEAD "5 hours ago"
+```
+
+Use ALL the features, e.g. excluding weekends and specific days and backdating only a range of commits:
+
+```shell
+git backdate 11abe2..3d13f 2023-07-01..2023-07-30 --business-hours --except-days 2023-01-05,2023-07-20..2023-07-24
 ```
 
 ## Installation
