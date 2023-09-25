@@ -32,12 +32,17 @@ def _parse_date(dateish: str) -> dt.date:
     return dt.datetime.strptime(dateish, "%Y-%m-%d").date()
 
 
-def get_dates(dateish: str) -> list[dt.date]:
+def get_dates(dateish: str, fill: bool = False) -> list[dt.date]:
     """Dateish is either one or two dateish strings, separated by .. if there are two.
     A dateish string can be an ISO 8601 date or anything parsed by your system's `date`,
     which often includes things like "last month" and "3 days ago"."""
     if ".." in dateish:
-        return [_parse_date(d) for d in dateish.split("..")]
+        dates = [_parse_date(d) for d in dateish.split("..")]
+        if not fill:
+            return dates
+        # fill in the gaps
+        start, end = dates
+        return [start + dt.timedelta(days=day) for day in range((end - start).days + 1)]
     result = _parse_date(dateish)
     return [result, result]
 
@@ -196,7 +201,7 @@ def main() -> None:
 
     except_days = args.except_days
     if except_days:
-        except_days = [get_dates(d) for d in except_days.split(",")]
+        except_days = [get_dates(d, fill=True) for d in except_days.split(",")]
         # Flatten the list
         except_days = [d for dates in except_days for d in dates]
 
