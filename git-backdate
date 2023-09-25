@@ -10,7 +10,16 @@ import random
 import re
 import sys
 from pathlib import Path
-from subprocess import call, check_call, check_output
+from subprocess import call, check_call, check_output, CalledProcessError
+
+
+def is_commit(commitish: str) -> bool:
+    """Return True if commitish is a commit-ish."""
+    try:
+        call_command(["git", "rev-parse", "--verify", commitish])
+        return True
+    except CalledProcessError:
+        return False
 
 
 def get_commits(commitish: str) -> list[str]:
@@ -89,10 +98,13 @@ def rewrite_history(
     business_hours: bool,
     no_business_hours: bool,
     except_days: list[dt.date] | None = None,
+    root: bool = False,
 ) -> None:
-    last_timestamp = get_commit_timestamp(f"{commits[0]}~1")
-    if last_timestamp and last_timestamp.date() > start:
-        start = last_timestamp.date()
+    last_timestamp = dt.datetime.combine(start, dt.time.min)
+    if not root:
+        last_timestamp = get_commit_timestamp(f"{commits[0]}~1")
+        if last_timestamp and last_timestamp.date() > start:
+            start = last_timestamp.date()
     except_days = except_days or []
     days = [
         start + dt.timedelta(days=day)
@@ -111,6 +123,7 @@ def rewrite_history(
     duration = len(days)
     commit_count = len(commits)
     commits_per_day = math.ceil(commit_count / duration)
+    day_progress = 0
     for commit_index in range(commit_count):
         progress = (commit_index + 1) / commit_count
         # first, choose the date
@@ -220,8 +233,10 @@ def main() -> None:
     # We construct a sed command to change only our commits
     short_commits = [c[:7] for c in commits]
     sed_command = rf"sed -i.bak -E 's/^pick ({'|'.join(short_commits)})/edit \1/'"
+    start_commit = f"{commits[0]}^"
+    is_root_rebase = is_commit(start_commit)
     check_call(
-        ["git", "rebase", "-i", commits[0] + "^"],
+        ["git", "rebase", "-i", "--root" if is_root_rebase else start_commit],
         env=dict(os.environ, GIT_SEQUENCE_EDITOR=sed_command),
     )
 
@@ -234,6 +249,7 @@ def main() -> None:
             business_hours=args.business_hours,
             no_business_hours=args.no_business_hours,
             except_days=except_days,
+            root=is_root_rebase,
         )
     except Exception:
         if rebase_in_progress():
