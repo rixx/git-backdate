@@ -2,15 +2,30 @@
 """Backdate a commit or range of commit to a date or range of dates.
 """
 from __future__ import annotations
+
 import argparse
 import datetime as dt
+import logging
 import math
 import os
 import random
 import re
 import sys
 from pathlib import Path
-from subprocess import call, check_call, check_output, CalledProcessError
+from subprocess import CalledProcessError, call, check_call, check_output
+
+
+def call_command(args, check=True, **kwargs):
+    logger = logging.getLogger("call_command")
+    logger.debug(" ".join(args))
+
+    if check:
+        return check_call(
+            args, stdout=open(os.devnull, "w"), stderr=open(os.devnull, "w"), **kwargs
+        )
+    return call(
+        args, stdout=open(os.devnull, "w"), stderr=open(os.devnull, "w"), **kwargs
+    )
 
 
 def is_commit(commitish: str) -> bool:
@@ -100,6 +115,9 @@ def rewrite_history(
     except_days: list[dt.date] | None = None,
     root: bool = False,
 ) -> None:
+    logger = logging.getLogger("rewrite_history")
+    logger.warning("Rewriting history")
+    logger.info(f"{len(commits)} commits to rewrite")
     last_timestamp = dt.datetime.combine(start, dt.time.min)
     if not root:
         last_timestamp = get_commit_timestamp(f"{commits[0]}~1")
@@ -124,6 +142,9 @@ def rewrite_history(
     commit_count = len(commits)
     commits_per_day = math.ceil(commit_count / duration)
     day_progress = 0
+    logger.info(f"Distributing to {duration} days")
+    logger.info(f"At most {commits_per_day} commits per day")
+
     for commit_index in range(commit_count):
         progress = (commit_index + 1) / commit_count
         # first, choose the date
@@ -147,7 +168,7 @@ def rewrite_history(
         )
 
         # Set both the author and committer dates
-        check_call(
+        call_command(
             [
                 "git",
                 "commit",
@@ -159,7 +180,7 @@ def rewrite_history(
             env=dict(os.environ, GIT_COMMITTER_DATE=timestamp.isoformat()),
         )
         last_timestamp = timestamp
-        check_call(["git", "rebase", "--continue"])
+        call_command(["git", "rebase", "--continue"])
 
 
 def normalize_commit(commit: str) -> str:
@@ -203,20 +224,39 @@ def main() -> None:
         type=str,
         help="A comma-separated list of dates or date ranges to exclude from backdating (eg. 2021-01-01,2021-01-02..2021-01-04)",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        help="Set the log level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="WARNING",
+    )
     args = parser.parse_args()
 
     if args.business_hours and args.no_business_hours:
         print("Cannot use both business hours and outside business hours")
         sys.exit(1)
 
+    logging.basicConfig(
+        level=args.log_level,
+        format="[%(levelname)s] %(message)s",
+    )
+    logger = logging.getLogger("main")
+
     commits = [normalize_commit(c) for c in get_commits(args.commits)]
+    logger.info(f"Found {len(commits)} commits to backdate")
+    logger.debug(f"Commits: {', '.join(commits)}")
+
     start, end = get_dates(args.dates)
+    logger.info(f"Backdating to {start.isoformat()}..{end.isoformat()}")
 
     except_days = args.except_days
     if except_days:
         except_days = [get_dates(d, fill=True) for d in except_days.split(",")]
         # Flatten the list
         except_days = [d for dates in except_days for d in dates]
+
+    logger.info(f"Excluding {len(except_days) if except_days else 0} days.")
 
     if not commits:
         print("No commits found")
@@ -225,7 +265,9 @@ def main() -> None:
     # Make sure our current commit sits on top of the commit range with --is-ancestor
     for commit in commits:
         is_head = is_equal(commit, "HEAD")
-        is_ancestor = call(["git", "merge-base", "--is-ancestor", "HEAD", commit])
+        is_ancestor = call_command(
+            ["git", "merge-base", "--is-ancestor", "HEAD", commit], check=False
+        )
         if not is_head and not is_ancestor:
             print(f"Current commit is not an ancestor of the commit range {commit}")
             sys.exit(1)
@@ -235,7 +277,10 @@ def main() -> None:
     sed_command = rf"sed -i.bak -E 's/^pick ({'|'.join(short_commits)})/edit \1/'"
     start_commit = f"{commits[0]}^"
     is_root_rebase = is_commit(start_commit)
-    check_call(
+    if is_root_rebase:
+        logger.warning("Rebasing entire repository including root commit!")
+
+    call_command(
         ["git", "rebase", "-i", "--root" if is_root_rebase else start_commit],
         env=dict(os.environ, GIT_SEQUENCE_EDITOR=sed_command),
     )
@@ -253,12 +298,14 @@ def main() -> None:
         )
     except Exception:
         if rebase_in_progress():
-            check_call(["git", "rebase", "--abort"])
+            call_command(["git", "rebase", "--abort"])
+            logger.error("Rebase aborted!")
         raise
     finally:
         # Shouldn't happen, but let's make sure we end on a clean repo
         if rebase_in_progress():
-            check_call(["git", "rebase", "--continue"])
+            call_command(["git", "rebase", "--continue"])
+            logger.info("Didn't end on a clean repo, finishing rebase.")
 
 
 if __name__ == "__main__":
