@@ -278,7 +278,7 @@ def main() -> None:
     short_commits = [c[:7] for c in commits]
     sed_command = rf"sed -i.bak -E 's/^pick ({'|'.join(short_commits)})/edit \1/'"
     start_commit = f"{commits[0]}^"
-    is_root_rebase = is_commit(start_commit)
+    is_root_rebase = not is_commit(start_commit)
     if is_root_rebase:
         logger.warning("Rebasing entire repository including root commit!")
 
