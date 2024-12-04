@@ -156,17 +156,26 @@ def rewrite_history(
             day_progress = 0
         day_progress += 1
 
+        # if we are on the day of the last commit, we need to select a mininum
+        # hour accordingly. otherwise we can start early.
+        if last_timestamp and date == last_timestamp.date():
+            _min_hour = last_timestamp.hour
+        else:
+            _min_hour = min_hour
+
         # if we only have one commit per day at most, we can use the whole day.
         # otherwise, we need to limit the time range further to avoid collisions.
         if commits_per_day <= 1:
             _max_hour = max_hour
         else:
-            _max_hour = min_hour + int(
-                (max_hour - min_hour) * (day_progress / commits_per_day)
+            _max_hour = _min_hour + int(
+                (max_hour - _min_hour) * (day_progress / commits_per_day)
             )
 
+        logger.debug(f"Getting a timestamp between {_min_hour} and {_max_hour}, greater than {last_timestamp}")
+
         timestamp = _get_timestamp(
-            date, min_hour=min_hour, max_hour=_max_hour, greater_than=last_timestamp
+            date, min_hour=_min_hour, max_hour=_max_hour, greater_than=last_timestamp
         )
 
         # Set both the author and committer dates
