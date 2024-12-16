@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from subprocess import CalledProcessError, call, check_call, check_output
 
+DATE_CMD = os.environ.get("GIT_BACKDATE_DATE_CMD", "date")
+
 
 def call_command(args, check=True, **kwargs):
     logger = logging.getLogger("call_command")
@@ -53,7 +55,7 @@ def _parse_date(dateish: str) -> dt.date:
     """Parse a dateish string into a datetime object."""
     if not re.match(r"\d{4}-\d{2}-\d{2}", dateish):
         dateish = (
-            check_output(["date", "--iso-8601", "--date", dateish]).strip().decode()
+            check_output([DATE_CMD, "--iso-8601", "--date", dateish]).strip().decode()
         )
     return dt.datetime.strptime(dateish, "%Y-%m-%d").date()
 
@@ -172,7 +174,9 @@ def rewrite_history(
                 (max_hour - _min_hour) * (day_progress / commits_per_day)
             )
 
-        logger.debug(f"Getting a timestamp between {_min_hour} and {_max_hour}, greater than {last_timestamp}")
+        logger.debug(
+            f"Getting a timestamp between {_min_hour} and {_max_hour}, greater than {last_timestamp}"
+        )
 
         timestamp = _get_timestamp(
             date, min_hour=_min_hour, max_hour=_max_hour, greater_than=last_timestamp

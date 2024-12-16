@@ -68,7 +68,9 @@ The magic of git will now let you use `git backdate` as a command.
 `git-backdate` tries to only require git and Python. However, it also relies on
 
 - `sed` if you want to backdate more than the most recent commit <sup>for perfectly fine reasons, don't worry about it</sup>
-- `date` if you want to pass date descriptions like "last Friday" or "2 weeks ago"
+- `date` if you want to pass date descriptions like "last Friday" or "2 weeks ago". If you use git-backdate on MacOS and
+  want to use this feature, you will need to run the command with ``GIT_BACKDATE_DATE_CMD="gdate" git backdate …``, as
+  native `date` on MacOS does not support the `--date` flag.
 
 ## … why.
 
