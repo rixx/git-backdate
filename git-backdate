@@ -41,7 +41,7 @@ def get_commits(commitish: str) -> list[str]:
     """If commitish is a range, return a list of commits in that range."""
     if commitish.endswith(".."):
         commitish = f"{commitish}HEAD"
-    elif ".." not in commitish:
+    elif ".." not in commitish and commitish not in ("HEAD", "@"):
         commitish = f"{commitish}..HEAD"
     result = check_output(["git", "rev-list", commitish]).splitlines()
     # git rev-list returns commits in reverse chronological order
