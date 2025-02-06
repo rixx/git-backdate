@@ -177,6 +177,7 @@ def rewrite_history(
             _max_hour = _min_hour + int(
                 (max_hour - _min_hour) * (day_progress / commits_per_day)
             )
+        _max_hour = min(_max_hour, 23)
 
         logger.debug(
             f"Getting a timestamp between {_min_hour} and {_max_hour}, greater than {last_timestamp}"
