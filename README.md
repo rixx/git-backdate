@@ -51,6 +51,12 @@ Use ALL the features, e.g. excluding weekends and specific days and backdating o
 git backdate 11abe2..3d13f 2023-07-01..2023-07-30 --business-hours --except-days 2023-01-05,2023-07-20..2023-07-24
 ```
 
+Backdate the entire repository history, including the very first commit:
+
+```shell
+git backdate ROOT "2000-01-01..today"
+```
+
 ## Installation
 
 Drop the `git-backdate` file somewhere in your `PATH` or wherever you like:
