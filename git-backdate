@@ -84,7 +84,7 @@ def get_commit_timestamp(commit: str) -> dt.datetime | None:
     """Return the timestamp of the given commit."""
     try:
         timestamp = (
-            check_output(["git", "show", "-s", "--format=%ct", commit]).strip().decode()
+            check_output(["git", "show", "--no-show-signature", "-s", "--format=%ct", commit]).strip().decode()
         )
         return dt.datetime.fromtimestamp(int(timestamp))
     except CalledProcessError:
